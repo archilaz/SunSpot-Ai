@@ -1,225 +1,363 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Golden Horizon • Sunset & Sunrise Spots</title>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sunspots AI • Golden Hour Near You</title>
   <script src="https://cdn.tailwindcss.com"></script>
-
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Playfair+Display:wght@700&amp;display=swap" rel="stylesheet">
+  
   <style>
-    :root {
-      --gradient-start: #5b21b6;
-      --gradient-mid:   #7c3aed;
-      --gradient-end:   #f59e0b;
-      --text-glow:      #fef08c;
-    }
-
-    body {
-      font-family: 'Inter', system-ui, sans-serif;
-      background: #0f0f17;
-      color: #f1f5f9;
-      overflow-x: hidden;
-    }
-
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&amp;family=Inter:wght@400;500;600&amp;display=swap');
+    
+    :root { --sun: #f59e0b; }
+    
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    
     .hero-bg {
-      background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-mid) 40%, var(--gradient-end) 100%);
-      background-size: 200% 200%;
-      animation: gradientFlow 18s ease infinite;
+      background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 35%, #f59e0b 75%, #fed7aa 100%);
+      position: relative;
+      overflow: hidden;
     }
-
-    @keyframes gradientFlow {
-      0%   { background-position: 0% 50%; }
-      50%  { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
+    
+    .hero-bg::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.18) 0%, transparent 50%),
+                  radial-gradient(circle at 80% 70%, rgba(255,255,255,0.12) 0%, transparent 50%);
+      animation: sparkle 12s infinite alternate;
     }
-
-    .title-glow {
-      background: linear-gradient(to right, #fefce8, #fcd34d, #fbbf24);
+    
+    @keyframes sparkle { 0% { opacity: 0.65; } 100% { opacity: 0.95; } }
+    
+    .sun-icon { animation: glow 5s infinite alternate; }
+    @keyframes glow { 0% { filter: drop-shadow(0 0 15px #fef08c); } 100% { filter: drop-shadow(0 0 40px #fef08c); } }
+    
+    .constellation { position: absolute; top: 15%; right: 15%; opacity: 0.25; pointer-events: none; }
+    
+    .spot-card {
+      transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .spot-card:hover {
+      transform: scale(1.05) translateY(-12px);
+      box-shadow: 0 30px 60px -15px rgb(245 158 11 / 0.4);
+    }
+    
+    .map-container { height: 460px; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.3); }
+    
+    .gradient-text {
+      background: linear-gradient(to right, #fef08c, #f59e0b);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      filter: drop-shadow(0 0 25px rgba(251,191,36,0.5));
-    }
-
-    .constellation {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      top: 0; left: 0;
-      pointer-events: none;
-      opacity: 0.15;
-    }
-
-    .photo-card {
-      transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
-      overflow: hidden;
-      border-radius: 1.5rem;
-    }
-
-    .photo-card:hover {
-      transform: scale(1.06) translateY(-12px);
-      box-shadow: 0 30px 60px -15px rgba(251,191,36,0.25);
-    }
-
-    .photo-card img {
-      transition: transform 0.8s ease;
-    }
-
-    .photo-card:hover img {
-      transform: scale(1.12);
-    }
-
-    .section-title {
-      font-family: 'Playfair Display', serif;
     }
   </style>
 </head>
-<body class="min-h-screen">
+<body class="bg-zinc-950 text-white">
 
-  <!-- Hero -->
-  <header class="hero-bg relative h-screen flex items-center justify-center text-center px-6 overflow-hidden">
-    <!-- Subtle constellation overlay -->
+  <!-- NAV -->
+  <nav class="fixed top-0 z-50 w-full bg-black/30 backdrop-blur-lg border-b border-white/10">
+    <div class="max-w-7xl mx-auto px-8 py-6 flex justify-between items-center">
+      <div class="flex items-center gap-3">
+        <div class="text-4xl">☀️</div>
+        <div class="text-4xl font-bold tracking-tighter">
+          <span class="gradient-text">Sunspots</span><span class="text-white">AI</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-8 text-sm font-medium">
+        <a onclick="showResultsSection()" class="hover:text-amber-300 cursor-pointer">Near Me</a>
+        <a onclick="showFavorites()" class="hover:text-amber-300 cursor-pointer">Favorites</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="hero-bg h-screen flex items-center justify-center text-center relative">
     <div class="constellation">
-      <svg width="100%" height="100%" viewBox="0 0 1200 800" preserveAspectRatio="none">
-        <circle cx="180" cy="120" r="3" fill="white"/>
-        <circle cx="420" cy="80"  r="3" fill="white"/>
-        <circle cx="680" cy="220" r="3" fill="white"/>
-        <circle cx="920" cy="340" r="3" fill="white"/>
-        <circle cx="300" cy="480" r="3" fill="white"/>
-        <circle cx="760" cy="520" r="3" fill="white"/>
-        <line x1="180" y1="120" x2="420" y2="80"  stroke="white" stroke-width="1.2" opacity="0.4"/>
-        <line x1="420" y1="80"  x2="680" y2="220" stroke="white" stroke-width="1.2" opacity="0.4"/>
-        <line x1="680" y1="220" x2="920" y2="340" stroke="white" stroke-width="1.2" opacity="0.4"/>
+      <svg width="220" height="180" viewBox="0 0 220 180">
+        <circle cx="30" cy="40" r="3" fill="#fefce8"/>
+        <circle cx="90" cy="25" r="3" fill="#fefce8"/>
+        <circle cx="160" cy="65" r="3" fill="#fefce8"/>
+        <circle cx="190" cy="120" r="3" fill="#fefce8"/>
+        <line x1="30" y1="40" x2="90" y2="25" stroke="#fefce8" stroke-width="1.5" opacity="0.6"/>
+        <line x1="90" y1="25" x2="160" y2="65" stroke="#fefce8" stroke-width="1.5" opacity="0.6"/>
       </svg>
     </div>
 
-    <div class="relative z-10 max-w-5xl">
-      <h1 class="text-6xl md:text-8xl lg:text-9xl font-bold tracking-tight title-glow mb-6 leading-none">
-        Golden Horizon
+    <div class="relative z-10 max-w-4xl px-6">
+      <h1 class="text-7xl md:text-8xl font-bold tracking-tighter leading-none mb-4">
+        SUNSPOTS <span class="gradient-text">AI</span>
       </h1>
-
-      <p class="text-xl md:text-3xl text-slate-200 font-light mb-12 max-w-3xl mx-auto leading-relaxed">
-        Find your perfect moment when the sky turns gold
-      </p>
-
-      <button class="px-10 py-6 bg-white/10 backdrop-blur-lg border border-white/20 rounded-full text-lg font-medium hover:bg-white/20 transition-all duration-300 shadow-xl">
-        Discover Nearby Spots →
+      <p class="text-3xl text-amber-100 font-light mb-10">Your golden hour within 100 km</p>
+      
+      <div class="max-w-xl mx-auto bg-white/10 backdrop-blur-2xl rounded-3xl p-2 flex items-center gap-3">
+        <input id="city-input" type="text" placeholder="Enter city or address..." 
+               class="flex-1 bg-transparent px-8 py-6 text-lg placeholder:text-amber-200 focus:outline-none">
+        <button onclick="searchManualLocation()" 
+                class="px-12 py-6 bg-white text-zinc-950 font-semibold rounded-3xl hover:bg-amber-400 transition">
+          FIND SPOTS
+        </button>
+      </div>
+      
+      <button onclick="useMyLocation()" 
+              class="mt-8 flex items-center gap-3 mx-auto text-amber-100 hover:text-white transition">
+        <span class="text-3xl">📍</span>
+        <span class="text-lg font-medium">Use my current location</span>
       </button>
-    </div>
-
-    <div class="absolute bottom-12 left-1/2 -translate-x-1/2 text-sm tracking-widest opacity-70 animate-pulse">
-      SCROLL TO EXPLORE
     </div>
   </header>
 
-  <!-- Featured Destinations -->
-  <section class="py-24 px-6 md:px-12 lg:px-24 bg-gradient-to-b from-[#0f0f17] to-[#1a1b2e]">
-    <div class="max-w-7xl mx-auto">
-      <div class="flex flex-col md:flex-row justify-between items-end mb-16">
-        <h2 class="section-title text-5xl md:text-7xl font-semibold tracking-tight">
-          Featured Destinations
-        </h2>
-        <p class="text-slate-400 mt-4 md:mt-0">
-          Handpicked golden hour locations around the world
-        </p>
+  <!-- RESULTS SECTION -->
+  <div id="results" class="hidden max-w-7xl mx-auto px-8 py-20">
+    <div class="flex justify-between items-center mb-10">
+      <div>
+        <p class="text-amber-400 text-sm tracking-widest">WITHIN 100 KM • SAME CONTINENT</p>
+        <h2 id="location-name" class="text-5xl font-bold tracking-tighter gradient-text">Spots near You</h2>
       </div>
+      <button onclick="hideResults()" class="text-sm text-zinc-400 hover:text-white">✕ Clear</button>
+    </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-        <!-- Card 1 -->
-        <div class="photo-card group">
-          <div class="aspect-[4/5] relative overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800" alt="Sierra Golden Peak" class="w-full h-full object-cover">
-            <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-            <div class="absolute bottom-6 left-6 right-6">
-              <h3 class="text-2xl font-semibold">Sierra Golden Peak</h3>
-              <p class="text-slate-300 text-sm mt-1">California, USA</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Card 2 -->
-        <div class="photo-card group">
-          <div class="aspect-[4/5] relative overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800" alt="Santorini Twilight" class="w-full h-full object-cover">
-            <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-            <div class="absolute bottom-6 left-6 right-6">
-              <h3 class="text-2xl font-semibold">Santorini Twilight</h3>
-              <p class="text-slate-300 text-sm mt-1">Cyclades, Greece</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Card 3 -->
-        <div class="photo-card group">
-          <div class="aspect-[4/5] relative overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800" alt="Patagonia Fire Sky" class="w-full h-full object-cover">
-            <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-            <div class="absolute bottom-6 left-6 right-6">
-              <h3 class="text-2xl font-semibold">Patagonia Fire Sky</h3>
-              <p class="text-slate-300 text-sm mt-1">Torres del Paine, Chile</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Card 4 -->
-        <div class="photo-card group">
-          <div class="aspect-[4/5] relative overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1540979388789-7cee28a1cdc9?w=800" alt="Bali Cliff Edge" class="w-full h-full object-cover">
-            <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-            <div class="absolute bottom-6 left-6 right-6">
-              <h3 class="text-2xl font-semibold">Bali Cliff Edge</h3>
-              <p class="text-slate-300 text-sm mt-1">Uluwatu, Indonesia</p>
-            </div>
-          </div>
-        </div>
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
+      <!-- Map -->
+      <div class="lg:col-span-7">
+        <div id="main-map" class="map-container"></div>
+      </div>
+      
+      <!-- Spots Grid -->
+      <div class="lg:col-span-5">
+        <div id="spots-grid" class="grid grid-cols-1 gap-8"></div>
       </div>
     </div>
-  </section>
+  </div>
 
-  <!-- Latest Captures / Moodboard style -->
-  <section class="py-24 px-6 md:px-12 lg:px-24 bg-[#0a0a14]">
-    <div class="max-w-7xl mx-auto">
-      <h2 class="section-title text-5xl md:text-7xl font-semibold tracking-tight text-center mb-16">
-        Latest Golden Moments
-      </h2>
+  <!-- FAVORITES SECTION -->
+  <div id="favorites" class="hidden max-w-7xl mx-auto px-8 py-20">
+    <h2 class="text-5xl font-bold tracking-tighter mb-10 flex items-center gap-4">
+      ❤️ My Sunspots 
+      <span id="fav-count" class="text-amber-400 text-2xl">(0)</span>
+    </h2>
+    <div id="fav-map" class="map-container mb-12"></div>
+    <div id="fav-grid" class="grid grid-cols-1 md:grid-cols-3 gap-8"></div>
+  </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-        <div class="photo-card col-span-1 md:col-span-2 lg:col-span-1">
-          <img src="https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=1200" alt="Clouds over fjord" class="w-full aspect-[4/3] object-cover rounded-3xl">
-          <p class="mt-5 text-xl font-medium">Fjords at Dawn • Norway</p>
-        </div>
+  <script>
+    let userLat = null, userLng = null, userName = "You";
+    let mainMap = null, favMap = null;
+    let favorites = JSON.parse(localStorage.getItem('sunspotsFavorites') || '[]');
 
-        <div class="photo-card">
-          <img src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800" alt="Mountain sunrise" class="w-full aspect-square object-cover rounded-3xl">
-          <p class="mt-5 text-xl font-medium">Alpine First Light • Switzerland</p>
-        </div>
+    const spotsDB = [
+      {id:1, name:"Eagle’s Nest Overlook", lat:34.1184, lng:-118.3003, city:"Los Angeles, USA", type:"Sunset", time:"19:42", dist:0},
+      {id:2, name:"Cliffside Serenity", lat:36.4618, lng:25.375, city:"Santorini, Greece", type:"Sunset", time:"20:15", dist:0},
+      {id:3, name:"Lakeside Dawn", lat:51.332, lng:-116.178, city:"Banff, Canada", type:"Sunrise", time:"05:45", dist:0},
+      {id:4, name:"Desert Glow Ridge", lat:-25.344, lng:131.036, city:"Uluru, Australia", type:"Sunset", time:"18:50", dist:0},
+      {id:5, name:"Harbor Fire Deck", lat:-33.8568, lng:151.2153, city:"Sydney, Australia", type:"Sunset", time:"19:45", dist:0},
+      {id:6, name:"Temple First Light", lat:13.4125, lng:103.8667, city:"Siem Reap, Cambodia", type:"Sunrise", time:"05:50", dist:0},
+      {id:7, name:"Mountain Veil Vista", lat:48.8584, lng:2.2945, city:"Paris, France", type:"Sunset", time:"20:30", dist:0},
+      {id:8, name:"Ocean Edge Sanctuary", lat:-33.9629, lng:18.4098, city:"Cape Town, South Africa", type:"Sunset", time:"19:10", dist:0},
+      {id:9, name:"Canyon Ember Point", lat:36.0586, lng:-112.1085, city:"Arizona, USA", type:"Sunset", time:"19:20", dist:0},
+      {id:10, name:"Rooftop Whisper", lat:40.7128, lng:-74.0060, city:"New York, USA", type:"Sunset", time:"19:55", dist:0}
+    ];
 
-        <div class="photo-card">
-          <img src="https://images.unsplash.com/photo-1518098268026-4e266b1f3cd8?w=800" alt="Desert sunset" class="w-full aspect-square object-cover rounded-3xl">
-          <p class="mt-5 text-xl font-medium">Sahara Burning Sky • Morocco</p>
-        </div>
+    function haversine(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2-lat1)*Math.PI/180;
+      const dLon = (lon2-lon1)*Math.PI/180;
+      const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+      return (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))).toFixed(1);
+    }
 
-        <div class="photo-card">
-          <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800" alt="Tropical sunset" class="w-full aspect-square object-cover rounded-3xl">
-          <p class="mt-5 text-xl font-medium">Maldives Last Ray • Indian Ocean</p>
-        </div>
+    function isSameContinent(dist) {
+      return dist <= 3000; // rough filter: >3000 km = different continent
+    }
 
-        <div class="photo-card col-span-1 md:col-span-2 lg:col-span-1">
-          <img src="https://images.unsplash.com/photo-1540979388789-7cee28a1cdc9?w=1200" alt="City skyline dusk" class="w-full aspect-[4/3] object-cover rounded-3xl">
-          <p class="mt-5 text-xl font-medium">Tokyo Twilight • Japan</p>
-        </div>
-      </div>
-    </div>
-  </section>
+    function renderSpots() {
+      const filtered = spotsDB.map(s => {
+        const d = parseFloat(haversine(userLat, userLng, s.lat, s.lng));
+        return {...s, distance: d};
+      }).filter(s => s.distance <= 100 && isSameContinent(s.distance))
+        .sort((a,b) => a.distance - b.distance);
 
-  <footer class="py-16 text-center text-slate-500 text-sm border-t border-slate-800">
-    <p>Golden Horizon — Capturing the magic between day and night</p>
-    <p class="mt-2">© 2026 • Made for golden hour chasers</p>
-  </footer>
+      const grid = document.getElementById('spots-grid');
+      grid.innerHTML = '';
 
+      if (filtered.length === 0) {
+        grid.innerHTML = `<p class="text-center text-zinc-400 py-12">No golden hour spots within 100 km on the same continent.<br>Try a different city.</p>`;
+        return;
+      }
+
+      filtered.forEach(spot => {
+        const isFav = favorites.some(f => f.id === spot.id);
+        const card = document.createElement('div');
+        card.className = "spot-card bg-zinc-900 rounded-3xl overflow-hidden";
+        card.innerHTML = `
+          <div class="relative h-64">
+            <img src="https://picsum.photos/id/${spot.id+100}/800/600" class="w-full h-full object-cover">
+            <div class="absolute bottom-4 left-4 bg-black/70 px-5 py-1 rounded-3xl text-xs">${spot.distance} km</div>
+          </div>
+          <div class="p-6">
+            <h3 class="text-2xl font-semibold">${spot.name}</h3>
+            <p class="text-zinc-400">${spot.city}</p>
+            <div class="flex justify-between mt-6">
+              <span class="text-amber-400">${spot.type} • ${spot.time}</span>
+              <button onclick="toggleFavorite(${spot.id}); event.stopImmediatePropagation()" class="text-3xl ${isFav?'text-red-400':'text-white/30'}">❤️</button>
+            </div>
+            <button onclick="getDirections(${spot.lat},${spot.lng})" 
+                    class="mt-4 w-full py-4 bg-white text-zinc-950 font-semibold rounded-2xl">Get Directions</button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      // Map markers
+      if (mainMap) {
+        mainMap.eachLayer(l => { if (l instanceof L.Marker) mainMap.removeLayer(l); });
+        
+        L.marker([userLat, userLng], {icon: L.divIcon({html:'<div class="w-6 h-6 bg-amber-400 rounded-full border-4 border-white"></div>', iconSize:[24,24]})}).addTo(mainMap);
+        
+        filtered.forEach(s => {
+          L.marker([s.lat, s.lng]).addTo(mainMap)
+            .bindPopup(`<b>${s.name}</b><br>${s.distance} km`);
+        });
+      }
+    }
+
+    function toggleFavorite(id) {
+      const spot = spotsDB.find(s => s.id === id);
+      const idx = favorites.findIndex(f => f.id === id);
+      if (idx > -1) favorites.splice(idx,1);
+      else favorites.push(spot);
+      localStorage.setItem('sunspotsFavorites', JSON.stringify(favorites));
+      renderSpots();
+      renderFavorites();
+    }
+
+    function getDirections(lat, lng) {
+      window.open(`https://www.google.com/maps/dir/?api=1&origin=${userLat},${userLng}&destination=${lat},${lng}`, '_blank');
+    }
+
+    function initMap(containerId, lat, lng) {
+      const map = L.map(containerId, {zoomControl:false}).setView([lat, lng], 10);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+      L.control.zoom({position:'topright'}).addTo(map);
+      return map;
+    }
+
+    async function searchManualLocation() {
+      const input = document.getElementById('city-input').value.trim();
+      if (!input) return;
+      
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(input)}&limit=1`);
+      const data = await res.json();
+      if (!data.length) return alert("Location not found");
+      
+      userLat = parseFloat(data[0].lat);
+      userLng = parseFloat(data[0].lng);
+      userName = data[0].display_name.split(',')[0];
+      
+      document.getElementById('results').classList.remove('hidden');
+      document.getElementById('favorites').classList.add('hidden');
+      document.getElementById('location-name').textContent = `Spots near ${userName}`;
+      
+      if (!mainMap) mainMap = initMap('main-map', userLat, userLng);
+      else mainMap.flyTo([userLat, userLng], 10);
+      
+      renderSpots();
+    }
+
+    function useMyLocation() {
+      navigator.geolocation.getCurrentPosition(pos => {
+        userLat = pos.coords.latitude;
+        userLng = pos.coords.longitude;
+        userName = "You";
+        
+        document.getElementById('results').classList.remove('hidden');
+        document.getElementById('favorites').classList.add('hidden');
+        document.getElementById('location-name').textContent = "Spots near You";
+        
+        if (!mainMap) mainMap = initMap('main-map', userLat, userLng);
+        else mainMap.flyTo([userLat, userLng], 10);
+        
+        renderSpots();
+      }, () => alert("Please allow location access or search manually"));
+    }
+
+    function showFavorites() {
+      document.getElementById('results').classList.add('hidden');
+      document.getElementById('favorites').classList.remove('hidden');
+      
+      if (!favMap) favMap = initMap('fav-map', userLat || 40.7, userLng || -74);
+      else favMap.flyTo([userLat || favorites[0]?.lat || 40, userLng || favorites[0]?.lng || -74], 6);
+      
+      renderFavorites();
+    }
+
+    function renderFavorites() {
+      document.getElementById('fav-count').textContent = `(${favorites.length})`;
+      const grid = document.getElementById('fav-grid');
+      grid.innerHTML = '';
+      
+      favorites.forEach((spot, i) => {
+        const card = document.createElement('div');
+        card.className = "spot-card bg-zinc-900 rounded-3xl overflow-hidden";
+        card.innerHTML = `
+          <div class="relative h-64">
+            <img src="https://picsum.photos/id/${spot.id+100}/800/600" class="w-full h-full object-cover">
+          </div>
+          <div class="p-6">
+            <h3 class="text-2xl font-semibold">${spot.name}</h3>
+            <p class="text-zinc-400">${spot.city}</p>
+            <button onclick="removeFav(${i}); event.stopImmediatePropagation()" 
+                    class="mt-6 w-full py-4 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-2xl">Remove</button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function removeFav(i) {
+      favorites.splice(i,1);
+      localStorage.setItem('sunspotsFavorites', JSON.stringify(favorites));
+      renderFavorites();
+    }
+
+    function showResultsSection() {
+      document.getElementById('results').classList.remove('hidden');
+      document.getElementById('favorites').classList.add('hidden');
+    }
+
+    function hideResults() {
+      document.getElementById('results').classList.add('hidden');
+    }
+
+    // Click on main map to add custom favorite
+    setTimeout(() => {
+      if (mainMap) {
+        mainMap.on('click', function(e) {
+          const name = prompt("Name your custom golden hour spot:");
+          if (!name) return;
+          const custom = {
+            id: Date.now(),
+            name: name,
+            lat: e.latlng.lat,
+            lng: e.latlng.lng,
+            city: "Custom Location",
+            type: "Custom",
+            time: "—"
+          };
+          favorites.push(custom);
+          localStorage.setItem('sunspotsFavorites', JSON.stringify(favorites));
+          alert("Added to favorites!");
+          renderFavorites();
+        });
+      }
+    }, 1500);
+
+    // Tailwind init
+    window.onload = () => {
+      // demo load
+    };
+  </script>
 </body>
 </html>
