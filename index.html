@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sunset Horizons • Find Your Golden Hour</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&amp;family=Inter:wght@400;500&amp;display=swap');
+        
+        :root {
+            --sun-orange: #f59e0b;
+        }
+        
+        .hero-bg {
+            background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 30%, #f59e0b 70%, #fed7aa 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hero-bg::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 30%, rgba(255,255,255,0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 70%, rgba(255,255,255,0.12) 0%, transparent 50%);
+            animation: sparkle 8s infinite alternate;
+        }
+        
+        .sun-icon {
+            animation: sun-glow 4s infinite alternate;
+        }
+        
+        @keyframes sun-glow {
+            0% { filter: drop-shadow(0 0 10px #fef08c); }
+            100% { filter: drop-shadow(0 0 30px #fef08c); }
+        }
+        
+        @keyframes sparkle {
+            0% { opacity: 0.6; }
+            100% { opacity: 0.9; }
+        }
+        
+        .nav-link {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .nav-link:hover {
+            color: #fef08c;
+            transform: translateY(-2px);
+        }
+        
+        .spot-card {
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        .spot-card:hover {
+            transform: scale(1.05) translateY(-8px);
+            box-shadow: 0 25px 50px -12px rgb(245 158 11 / 0.3);
+        }
+        
+        .map-container {
+            height: 400px;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+        }
+        
+        .gradient-text {
+            background: linear-gradient(to right, #fef08c, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+<body class="bg-zinc-950 text-white font-['Inter']">
+    <!-- NAV -->
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-black/30 backdrop-blur-lg border-b border-white/10">
+        <div class="max-w-7xl mx-auto px-8 py-5 flex items-center justify-between">
+            <!-- Logo -->
+            <div class="flex items-center gap-x-3">
+                <div class="w-9 h-9 bg-gradient-to-br from-amber-400 to-orange-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg">☀️</div>
+                <div>
+                    <span class="text-3xl font-bold tracking-tighter gradient-text">Sunset</span>
+                    <span class="text-3xl font-bold tracking-tighter text-white">Horizons</span>
+                </div>
+            </div>
+            
+            <!-- Menu -->
+            <div class="hidden md:flex items-center gap-x-8 text-sm font-medium">
+                <a href="#" class="nav-link">Discover</a>
+                <a href="#" class="nav-link">Sunsets</a>
+                <a href="#" class="nav-link">Sunrises</a>
+                <a href="#" onclick="triggerFindSpots()" class="nav-link">Near Me</a>
+                <a href="#" class="nav-link">Community</a>
+            </div>
+            
+            <div class="flex items-center gap-x-4">
+                <button onclick="triggerFindSpots()" 
+                        class="px-6 py-3 bg-white text-zinc-950 rounded-3xl font-semibold text-sm flex items-center gap-x-2 hover:bg-amber-400 transition-all">
+                    <span>📍</span>
+                    <span>Find My Spots</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO -->
+    <header class="hero-bg min-h-screen flex items-center pt-20 relative">
+        <!-- Decorative suns -->
+        <div class="absolute top-12 left-12 text-6xl sun-icon opacity-30">☀️</div>
+        <div class="absolute top-28 right-20 text-8xl sun-icon opacity-20">☀️</div>
+        <div class="absolute bottom-40 left-1/3 text-5xl sun-icon opacity-30">☀️</div>
+        
+        <!-- Constellation dots -->
+        <div class="absolute top-1/3 right-1/4 w-40 h-40">
+            <svg width="160" height="160" class="opacity-20">
+                <circle cx="20" cy="30" r="3" fill="#fefce8"/>
+                <circle cx="80" cy="15" r="3" fill="#fefce8"/>
+                <circle cx="120" cy="60" r="3" fill="#fefce8"/>
+                <circle cx="140" cy="110" r="3" fill="#fefce8"/>
+                <circle cx="50" cy="130" r="3" fill="#fefce8"/>
+                <line x1="20" y1="30" x2="80" y2="15" stroke="#fefce8" stroke-width="1.5" opacity="0.4"/>
+                <line x1="80" y1="15" x2="120" y2="60" stroke="#fefce8" stroke-width="1.5" opacity="0.4"/>
+                <line x1="120" y1="60" x2="140" y2="110" stroke="#fefce8" stroke-width="1.5" opacity="0.4"/>
+            </svg>
+        </div>
+        
+        <div class="max-w-5xl mx-auto px-8 text-center relative z-10">
+            <div class="max-w-2xl mx-auto">
+                <h1 class="text-7xl md:text-8xl font-bold tracking-tighter leading-none mb-4 text-white">
+                    SUNSET<br>HORIZONS
+                </h1>
+                <p class="text-2xl md:text-3xl text-amber-100 font-light tracking-wide mb-8">
+                    The nearest perfect spot to watch<br>the sky paint itself gold
+                </p>
+                
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-6">
+                    <button onclick="triggerFindSpots()" 
+                            class="group relative px-10 py-6 bg-white rounded-3xl text-xl font-semibold text-zinc-950 flex items-center gap-x-4 hover:scale-105 transition-all shadow-2xl">
+                        <span>Find the nearest golden hour</span>
+                        <span class="text-3xl group-active:rotate-12 transition-transform">📍</span>
+                    </button>
+                    
+                    <div onclick="useManualLocation()" 
+                         class="cursor-pointer text-sm flex flex-col items-center gap-y-1 text-amber-100 hover:text-white transition-colors">
+                        <div class="w-8 h-8 border border-amber-200 rounded-2xl flex items-center justify-center text-xl">⌨️</div>
+                        <span class="text-xs tracking-widest">ENTER CITY</span>
+                    </div>
+                </div>
+                
+                <p class="mt-10 text-xs tracking-[3px] text-amber-200/70 font-medium">POWERED BY YOUR LOCATION • REAL-TIME GOLDEN HOUR</p>
+            </div>
+        </div>
+        
+        <!-- Scroll indicator -->
+        <div class="absolute bottom-10 left-1/2 flex flex-col items-center gap-y-2 text-xs text-amber-100/70">
+            <div class="w-px h-12 bg-gradient-to-b from-transparent via-amber-200/30 to-transparent"></div>
+            <span class="tracking-widest">SCROLL FOR INSPIRATION</span>
+        </div>
+    </header>
+
+    <!-- RESULTS SECTION (hidden until location found) -->
+    <div id="results-section" class="hidden max-w-7xl mx-auto px-8 py-16">
+        <div class="flex items-end justify-between mb-8">
+            <div>
+                <p class="text-amber-400 text-sm font-medium tracking-widest">NEAREST TO YOU</p>
+                <h2 id="location-title" class="text-5xl font-bold tracking-tighter">Spots near <span class="gradient-text">Your Location</span></h2>
+            </div>
+            <button onclick="hideResults()" 
+                    class="text-sm flex items-center gap-x-2 text-amber-200 hover:text-white">
+                ✕ CLEAR
+            </button>
+        </div>
+        
+        <!-- Map -->
+        <div id="map" class="map-container mb-12"></div>
+        
+        <!-- Cards -->
+        <div id="spots-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <!-- Populated by JS -->
+        </div>
+    </div>
+
+    <!-- POPULAR SUNSETS SECTION -->
+    <div class="max-w-7xl mx-auto px-8 py-20 border-t border-white/10">
+        <div class="flex justify-between items-baseline mb-10">
+            <h2 class="text-4xl font-bold tracking-tighter">Popular Sunset Spots</h2>
+            <a href="#" class="text-amber-400 text-sm flex items-center gap-x-2 hover:text-amber-300">Explore all sunsets →</a>
+        </div>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <!-- Card 1 -->
+            <div class="spot-card group bg-zinc-900 rounded-3xl overflow-hidden">
+                <div class="relative h-64">
+                    <img src="https://picsum.photos/id/1016/800/600" alt="Griffith Observatory" 
+                         class="w-full h-full object-cover transition-all group-hover:scale-110">
+                    <div class="absolute top-4 right-4 bg-black/60 backdrop-blur px-4 py-1 rounded-3xl text-xs font-medium">4.8km away</div>
+                </div>
+                <div class="p-6">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-semibold text-xl">Griffith Observatory</h3>
+                            <p class="text-zinc-400 text-sm">Los Angeles, California</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-amber-400 text-xs">SUNSET</div>
+                            <div class="text-2xl font-light">19:42</div>
+                        </div>
+                    </div>
+                    <button onclick="window.open('https://www.google.com/maps/dir/?api=1&amp;destination=34.1184,-118.3003','_blank')" 
+                            class="mt-6 w-full py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-sm font-medium transition-colors">
+                        GET DIRECTIONS
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Card 2 -->
+            <div class="spot-card group bg-zinc-900 rounded-3xl overflow-hidden">
+                <div class="relative h-64">
+                    <img src="https://picsum.photos/id/133/800/600" alt="Oia Santorini" 
+                         class="w-full h-full object-cover transition-all group-hover:scale-110">
+                    <div class="absolute top-4 right-4 bg-black/60 backdrop-blur px-4 py-1 rounded-3xl text-xs font-medium">Santorini</div>
+                </div>
+                <div class="p-6">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-semibold text-xl">Oia Blue Domes</h3>
+                            <p class="text-zinc-400 text-sm">Santorini, Greece</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-amber-400 text-xs">SUNSET</div>
+                            <div class="text-2xl font-light">20:15</div>
+                        </div>
+                    </div>
+                    <button onclick="window.open('https://www.google.com/maps/dir/?api=1&amp;destination=36.4618,25.375','_blank')" 
+                            class="mt-6 w-full py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-sm font-medium transition-colors">
+                        GET DIRECTIONS
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Card 3 -->
+            <div class="spot-card group bg-zinc-900 rounded-3xl overflow-hidden">
+                <div class="relative h-64">
+                    <img src="https://picsum.photos/id/201/800/600" alt="Key West" 
+                         class="w-full h-full object-cover transition-all group-hover:scale-110">
+                    <div class="absolute top-4 right-4 bg-black/60 backdrop-blur px-4 py-1 rounded-3xl text-xs font-medium">Florida</div>
+                </div>
+                <div class="p-6">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-semibold text-xl">Mallory Square</h3>
+                            <p class="text-zinc-400 text-sm">Key West, Florida</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-amber-400 text-xs">SUNSET</div>
+                            <div class="text-2xl font-light">19:58</div>
+                        </div>
+                    </div>
+                    <button onclick="window.open('https://www.google.com/maps/dir/?api=1&amp;destination=24.5551,-81.78','_blank')" 
+                            class="mt-6 w-full py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-sm font-medium transition-colors">
+                        GET DIRECTIONS
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Card 4 -->
+            <div class="spot-card group bg-zinc-900 rounded-3xl overflow-hidden">
+                <div class="relative h-64">
+                    <img src="https://picsum.photos/id/251/800/600" alt="Uluru" 
+                         class="w-full h-full object-cover transition-all group-hover:scale-110">
+                    <div class="absolute top-4 right-4 bg-black/60 backdrop-blur px-4 py-1 rounded-3xl text-xs font-medium">Australia</div>
+                </div>
+                <div class="p-6">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-semibold text-xl">Uluru Sunset View</h3>
+                            <p class="text-zinc-400 text-sm">Northern Territory, Australia</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-amber-400 text-xs">SUNSET</div>
+                            <div class="text-2xl font-light">18:50</div>
+                        </div>
+                    </div>
+                    <button onclick="window.open('https://www.google.com/maps/dir/?api=1&amp;destination=-25.344,-131.036','_blank')" 
+                            class="mt-6 w-full py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-sm font-medium transition-colors">
+                        GET DIRECTIONS
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUNRISE SECTION -->
+    <div class="bg-zinc-900 py-20">
+        <div class="max-w-7xl mx-auto px-8">
+            <div class="flex justify-between items-baseline mb-10">
+                <h2 class="text-4xl font-bold tracking-tighter text-amber-100">Popular Sunrise Spots</h2>
+            </div>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <!-- Similar cards for sunrise but with different images -->
+                <div class="spot-card group bg-zinc-800 rounded-3xl overflow-hidden">
+                    <div class="relative h-64">
+                        <img src="https://picsum.photos/id/29/800/600" alt="Haleakala" 
+                             class="w-full h-full object-cover transition-all group-hover:scale-110">
+                    </div>
+                    <div class="p-6">
+                        <h3 class="font-semibold text-xl">Haleakalā Summit</h3>
+                        <p class="text-zinc-400 text-sm">Maui, Hawaii</p>
+                        <button onclick="window.open('https://www.google.com/maps/dir/?api=1&amp;destination=20.7097,-156.252','_blank')" 
+                                class="mt-6 w-full py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-sm font-medium transition-colors">
+                            GET DIRECTIONS
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="spot-card group bg-zinc-800 rounded-3xl overflow-hidden">
+                    <div class="relative h-64">
+                        <img src="https://picsum.photos/id/160/800/600" alt="Machu Picchu" 
+                             class="w-full h-full object-cover transition-all group-hover:scale-110">
+                    </div>
+                    <div class="p-6">
+                        <h3 class="font-semibold text-xl">Machu Picchu</h3>
+                        <p class="text-zinc-400 text-sm">Cusco Region, Peru</p>
+                        <button onclick="window.open('https://www.google.com/maps/dir/?api=1&amp;destination=-13.1631,-72.545','_blank')" 
+                                class="mt-6 w-full py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-sm font-medium transition-colors">
+                            GET DIRECTIONS
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="spot-card group bg-zinc-800 rounded-3xl overflow-hidden">
+                    <div class="relative h-64">
+                        <img src="https://picsum.photos/id/201/800/600" alt="Banff" 
+                             class="w-full h-full object-cover transition-all group-hover:scale-110">
+                    </div>
+                    <div class="p-6">
+                        <h3 class="font-semibold text-xl">Moraine Lake</h3>
+                        <p class="text-zinc-400 text-sm">Banff, Canada</p>
+                        <button onclick="window.open('https://www.google.com/maps/dir/?api=1&amp;destination=51.332,-116.178','_blank')" 
+                                class="mt-6 w-full py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-sm font-medium transition-colors">
+                            GET DIRECTIONS
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="spot-card group bg-zinc-800 rounded-3xl overflow-hidden">
+                    <div class="relative h-64">
+                        <img src="https://picsum.photos/id/251/800/600" alt="Cape Agulhas" 
+                             class="w-full h-full object-cover transition-all group-hover:scale-110">
+                    </div>
+                    <div class="p-6">
+                        <h3 class="font-semibold text-xl">Cape Agulhas</h3>
+                        <p class="text-zinc-400 text-sm">South Africa</p>
+                        <button onclick="window.open('https://www.google.com/maps/dir/?api=1&amp;destination=-34.8333,20.0','_blank')" 
+                                class="mt-6 w-full py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-sm font-medium transition-colors">
+                            GET DIRECTIONS
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="bg-black py-16 text-zinc-500 text-xs">
+        <div class="max-w-7xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-6">
+            <div class="flex items-center gap-x-3">
+                <div class="text-2xl">☀️</div>
+                <div class="font-medium tracking-widest text-amber-300">SUNSET HORIZONS</div>
+            </div>
+            <div class="text-center md:text-right">
+                Made with ❤️ for golden hour chasers • 
+                <span class="text-amber-400">Location data from your device</span>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Tailwind script run
+        function initializeTailwind() {
+            // Already configured via CDN
+        }
+        
+        // Haversine distance formula
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Earth's radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return (R * c).toFixed(1);
+        }
+        
+        // Predefined spots (real coordinates)
+        const allSpots = [
+            {
+                id: 1,
+                name: "Griffith Observatory",
+                lat: 34.1184,
+                lng: -118.3003,
+                img: "https://picsum.photos/id/1016/800/600",
+                city: "Los Angeles, CA",
+                type: "Sunset",
+                time: "19:42",
+                desc: "Iconic panoramic view over the city"
+            },
+            {
+                id: 2,
+                name: "Oia Village",
+                lat: 36.4618,
+                lng: 25.375,
+                img: "https://picsum.photos/id/133/800/600",
+                city: "Santorini, Greece",
+                type: "Sunset",
+                time: "20:15",
+                desc: "The most photographed sunset in the world"
+            },
+            {
+                id: 3,
+                name: "Mallory Square",
+                lat: 24.5551,
+                lng: -81.78,
+                img: "https://picsum.photos/id/160/800/600",
+                city: "Key West, FL",
+                type: "Sunset",
+                time: "19:58",
+                desc: "Daily sunset celebration"
+            },
+            {
+                id: 4,
+                name: "Haleakalā Summit",
+                lat: 20.7097,
+                lng: -156.252,
+                img: "https://picsum.photos/id/29/800/600",
+                city: "Maui, Hawaii",
+                type: "Sunrise",
+                time: "06:12",
+                desc: "Watch sunrise above the clouds"
+            },
+            {
+                id: 5,
+                name: "Uluru Sunset View",
+                lat: -25.344,
+                lng: 131.036,
+                img: "https://picsum.photos/id/251/800/600",
+                city: "Uluru, Australia",
+                type: "Sunset",
+                time: "18:50",
+                desc: "Sacred rock glowing at dusk"
+            },
+            {
+                id: 6,
+                name: "Moraine Lake",
+                lat: 51.332,
+                lng: -116.178,
+                img: "https://picsum.photos/id/201/800/600",
+                city: "Banff, Canada",
+                type: "Sunrise",
+                time: "05:45",
+                desc: "Turquoise lake reflecting the peaks"
+            }
+        ];
+        
+        let userLat = null;
+        let userLng = null;
+        let map = null;
+        
+        function triggerFindSpots() {
+            if (navigator.geolocation) {
+                document.getElementById('results-section').classList.remove('hidden');
+                document.getElementById('results-section').scrollIntoView({ behavior: 'smooth' });
+                
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLat = position.coords.latitude;
+                        userLng = position.coords.longitude;
+                        renderResults();
+                    },
+                    () => {
+                        // Fallback: simulate location (New York)
+                        userLat = 40.7128;
+                        userLng = -74.0060;
+                        alert("Location access denied. Showing demo results near New York City.");
+                        renderResults();
+                    }
+                );
+            }
+        }
+        
+        function useManualLocation() {
+            const city = prompt("Enter your city (demo mode):", "Paris");
+            if (!city) return;
+            
+            // Simulate Paris coordinates
+            userLat = 48.8566;
+            userLng = 2.3522;
+            document.getElementById('results-section').classList.remove('hidden');
+            document.getElementById('results-section').scrollIntoView({ behavior: 'smooth' });
+            renderResults();
+        }
+        
+        function renderResults() {
+            // Calculate distances and sort
+            const sortedSpots = [...allSpots].map(spot => {
+                const distance = calculateDistance(userLat, userLng, spot.lat, spot.lng);
+                return { ...spot, distance: parseFloat(distance) };
+            }).sort((a, b) => a.distance - b.distance);
+            
+            // Update title
+            document.getElementById('location-title').innerHTML = 
+                `Spots near <span class="gradient-text">You</span>`;
+            
+            // Render cards
+            const grid = document.getElementById('spots-grid');
+            grid.innerHTML = '';
+            
+            sortedSpots.slice(0, 6).forEach(spot => {
+                const cardHTML = `
+                    <div class="spot-card bg-zinc-900 rounded-3xl overflow-hidden border border-white/10">
+                        <div class="relative h-64">
+                            <img src="${spot.img}" alt="${spot.name}" 
+                                 class="w-full h-full object-cover">
+                            <div class="absolute bottom-4 left-4 bg-black/70 px-4 py-1 rounded-3xl text-xs font-medium">
+                                ${spot.distance} km
+                            </div>
+                        </div>
+                        <div class="p-6">
+                            <div class="flex justify-between">
+                                <div>
+                                    <h3 class="text-xl font-semibold">${spot.name}</h3>
+                                    <p class="text-zinc-400 text-sm">${spot.city}</p>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-${spot.type === 'Sunset' ? 'amber' : 'sky'}-400 text-xs tracking-widest">${spot.type}</div>
+                                    <div class="text-3xl font-light text-amber-200">${spot.time}</div>
+                                </div>
+                            </div>
+                            <p class="text-zinc-400 text-xs mt-3 line-clamp-2">${spot.desc}</p>
+                            
+                            <div class="mt-6 flex gap-3">
+                                <button onclick="window.open('https://www.google.com/maps/dir/?api=1&amp;origin=${userLat},${userLng}&amp;destination=${spot.lat},${spot.lng}','_blank')" 
+                                        class="flex-1 py-4 bg-white text-zinc-950 font-semibold rounded-2xl text-sm">
+                                    🧭 DIRECTIONS
+                                </button>
+                                <button onclick="alert('Added to your favorites ✨')" 
+                                        class="px-6 py-4 border border-white/30 rounded-2xl hover:border-amber-400 transition-colors">
+                                    ❤️
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                grid.innerHTML += cardHTML;
+            });
+            
+            // Initialize map if not already
+            if (!map) {
+                map = L.map('map', {
+                    zoomControl: true,
+                    attributionControl: false
+                }).setView([userLat, userLng], 8);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    className: 'map-tiles'
+                }).addTo(map);
+                
+                // User location marker
+                L.marker([userLat, userLng], {
+                    icon: L.divIcon({
+                        className: 'user-marker',
+                        html: `<div style="background: #f59e0b; width: 18px; height: 18px; border-radius: 9999px; border: 3px solid white; box-shadow: 0 0 0 6px rgba(245,158,11,0.4);"></div>`,
+                        iconSize: [18, 18]
+                    })
+                }).addTo(map).bindPopup("You are here");
+                
+                // Add spot markers
+                sortedSpots.slice(0, 4).forEach(spot => {
+                    L.marker([spot.lat, spot.lng]).addTo(map)
+                        .bindPopup(`<b>${spot.name}</b><br>${spot.distance} km away`);
+                });
+            } else {
+                // Re-center map
+                map.flyTo([userLat, userLng], 8);
+            }
+        }
+        
+        function hideResults() {
+            document.getElementById('results-section').classList.add('hidden');
+            if (map) map.remove();
+            map = null;
+        }
+        
+        // Keyboard shortcut
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '/' && document.activeElement.tagName !== "INPUT") {
+                e.preventDefault();
+                triggerFindSpots();
+            }
+        });
+        
+        // Init
+        window.onload = () => {
+            initializeTailwind();
+            // Pre-load a demo if wanted (commented out)
+            // triggerFindSpots();
+        };
+    </script>
+</body>
+</html>
